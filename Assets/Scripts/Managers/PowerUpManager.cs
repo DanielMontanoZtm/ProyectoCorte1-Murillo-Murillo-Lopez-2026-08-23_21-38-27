@@ -2,63 +2,83 @@ using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// Bridges the HUD power-up button with GameManager.TryActivatePowerUp().
-/// Attach this to a canvas or manager GameObject.
+/// PowerUpManager — observador pasivo del estado del power-up.
 ///
-/// The tactile metaphor: player taps the glowing power-up button on the HUD
-/// when the charge meter is full.  The button is disabled (greyed out) when
-/// the charge is not full, providing clear visual feedback.
+/// CAMBIO v2 (instantaneous power-up):
+///   El power-up ya NO se activa mediante un botón de HUD.  Se activa
+///   automáticamente en GameManager cuando el caldero recoge el objeto
+///   PowerUp y la carga llega al 100%.
+///
+///   Este componente ahora actúa únicamente como OBSERVADOR:
+///     • Escucha OnPowerUpChargeChanged  → actualiza barra de carga (para HUD futuro).
+///     • Escucha OnPowerUpStateChanged   → actualiza icono y estado visual.
+///     • El botón de HUD, si existe en escena, se deshabilita completamente
+///       para que el jugador no pueda confundirse.
+///
+///   Todas las referencias de UI son opcionales (la jugabilidad funciona
+///   aunque el Canvas no esté en escena todavía).
+///
+/// Coloca este componente en cualquier GameObject de la escena; no requiere
+/// Canvas para funcionar.
 /// </summary>
 public class PowerUpManager : MonoBehaviour
 {
-    [Header("HUD Button reference")]
-    [SerializeField] private Button powerUpButton;
-
-    [Header("Visual feedback")]
-    [SerializeField] private Image  chargeBarFill;      // Image set to Filled type
+    [Header("HUD references (opcional — se ignoran si son null)")]
+    [SerializeField] private Button powerUpButton;   // deshabilitado permanentemente en v2
+    [SerializeField] private Image  chargeBarFill;
     [SerializeField] private Image  buttonIcon;
-    [SerializeField] private Color  chargedColor   = new Color(0.2f, 1f, 0.5f);
-    [SerializeField] private Color  inactiveColor  = new Color(0.5f, 0.5f, 0.5f);
+
+    [Header("Visual state colors")]
+    [SerializeField] private Color chargedColor  = new Color(1f,  0.85f, 0f);   // gold — active
+    [SerializeField] private Color inactiveColor = new Color(0.5f, 0.5f, 0.5f); // grey — idle
 
     // ── Unity lifecycle ───────────────────────────────────────────────────────
+
     private void OnEnable()
     {
-        if (GameManager.Instance != null)
-            GameManager.Instance.OnPowerUpChargeChanged.AddListener(OnChargeChanged);
+        var gm = GameManager.Instance;
+        if (gm == null) return;
 
-        if (powerUpButton != null)
-            powerUpButton.onClick.AddListener(OnPowerUpButtonPressed);
+        gm.OnPowerUpChargeChanged.AddListener(OnChargeChanged);
+        gm.OnPowerUpStateChanged.AddListener(OnPowerUpStateChanged);
     }
 
     private void OnDisable()
     {
-        if (GameManager.Instance != null)
-            GameManager.Instance.OnPowerUpChargeChanged.RemoveListener(OnChargeChanged);
+        var gm = GameManager.Instance;
+        if (gm == null) return;
 
-        if (powerUpButton != null)
-            powerUpButton.onClick.RemoveListener(OnPowerUpButtonPressed);
+        gm.OnPowerUpChargeChanged.RemoveListener(OnChargeChanged);
+        gm.OnPowerUpStateChanged.RemoveListener(OnPowerUpStateChanged);
     }
 
-    // ── Callbacks ─────────────────────────────────────────────────────────────
+    private void Start()
+    {
+        // The button should never be interactive — activation is automatic now.
+        // Disable it so players don't expect to tap it.
+        if (powerUpButton != null)
+        {
+            powerUpButton.interactable = false;
+            Debug.Log("[PowerUpManager] HUD power-up button permanently disabled " +
+                      "(power-up activates instantly on catch).");
+        }
+    }
+
+    // ── Event callbacks ───────────────────────────────────────────────────────
 
     private void OnChargeChanged(float charge)
     {
-        bool full = charge >= 1f;
-
         if (chargeBarFill != null)
             chargeBarFill.fillAmount = charge;
-
-        if (buttonIcon != null)
-            buttonIcon.color = full ? chargedColor : inactiveColor;
-
-        if (powerUpButton != null)
-            powerUpButton.interactable = full && !GameManager.Instance.PowerUpActive;
     }
 
-    private void OnPowerUpButtonPressed()
+    private void OnPowerUpStateChanged(bool isActive)
     {
-        bool activated = GameManager.Instance?.TryActivatePowerUp() ?? false;
-        if (activated)
-            Debug.Log("[PowerUpManager] Power-up activated!");
+        if (buttonIcon != null)
+            buttonIcon.color = isActive ? chargedColor : inactiveColor;
+
+        // Keep button non-interactive regardless of state
+        if (powerUpButton != null)
+            powerUpButton.interactable = false;
     }
 }

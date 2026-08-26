@@ -1,31 +1,30 @@
 using UnityEngine;
 
 /// <summary>
-/// Scene-level bootstrap.  Place this on an empty GameObject called
-/// "Bootstrap" in Main.unity.
+/// Scene-level bootstrap. Attach to an empty GameObject named "Bootstrap"
+/// in the Main scene.
 ///
-/// It ensures all singleton managers are present (creates them if missing),
-/// positions the main camera, and starts the spawn system when the game
-/// transitions to Playing state.
+/// Responsibilities:
+///   1. Ensures all singleton managers exist (creates them if missing).
+///   2. Attaches CameraController to the Main Camera (aspect-ratio-aware setup).
+///   3. Optionally auto-starts game and spawner (useful during dev/testing).
 ///
-/// Camera setup:
-///   - Orthographic, looking straight down the Z axis (side/front view)
-///   - Positioned so the full play lane is visible on a mobile portrait screen
+/// CAMBIO v2:
+///   - Camera setup delegado a CameraController (ya no fija orthographic size
+///     ni posición hardcodeada aquí).  GameBootstrap solo garantiza que el
+///     componente exista en la cámara.
+///   - CollisionFeedback añadido a la lista de managers garantizados.
+///   - autoStartOnLoad útil para testear jugabilidad sin menú todavía.
 /// </summary>
 public class GameBootstrap : MonoBehaviour
 {
-    [Header("Camera settings")]
-    [SerializeField] private float cameraOrthographicSize = 6f;
-    [SerializeField] private Vector3 cameraPosition       = new Vector3(0f, 4f, -12f);
-    [SerializeField] private Vector3 cameraRotation       = new Vector3(10f, 0f, 0f);
-
-    [Header("Auto-start game on scene load")]
-    [SerializeField] private bool autoStartOnLoad = false;
+    [Header("Auto-start (useful while testing without a menu)")]
+    [SerializeField] private bool autoStartOnLoad = true;
 
     private void Awake()
     {
         EnsureManagers();
-        ConfigureCamera();
+        EnsureCamera();
     }
 
     private void Start()
@@ -39,26 +38,27 @@ public class GameBootstrap : MonoBehaviour
 
     // ── Camera ────────────────────────────────────────────────────────────────
 
-    private void ConfigureCamera()
+    private void EnsureCamera()
     {
         Camera main = Camera.main;
+
         if (main == null)
         {
-            // No camera in scene — create one
-            GameObject camGO = new GameObject("Main Camera");
+            // Only create a camera if there genuinely isn't one in the scene
+            var camGO = new GameObject("Main Camera");
             camGO.tag = "MainCamera";
             main      = camGO.AddComponent<Camera>();
             camGO.AddComponent<AudioListener>();
             Debug.Log("[GameBootstrap] Created Main Camera.");
         }
 
-        main.orthographic     = false;
-        main.fieldOfView      = 60f;
-        main.nearClipPlane    = 0.1f;
-        main.farClipPlane     = 100f;
-        main.transform.position = cameraPosition;
-        main.transform.eulerAngles = cameraRotation;
-        main.backgroundColor  = new Color(0.06f, 0.04f, 0.12f); // dark purple sky
+        // Add CameraController only if not already present.
+        // It will NOT move the camera — only adjusts FOV for the device aspect ratio.
+        if (main.GetComponent<CameraController>() == null)
+        {
+            main.gameObject.AddComponent<CameraController>();
+            Debug.Log("[GameBootstrap] Added CameraController to Main Camera.");
+        }
     }
 
     // ── Manager presence check ────────────────────────────────────────────────
@@ -69,15 +69,18 @@ public class GameBootstrap : MonoBehaviour
         Ensure<LevelManager>("LevelManager");
         Ensure<ObjectSpawner>("ObjectSpawner");
         Ensure<MobileInputHandler>("MobileInputHandler");
+        Ensure<CollisionFeedback>("CollisionFeedback");
     }
 
     private static T Ensure<T>(string goName) where T : Component
     {
-        T existing = FindFirstObjectByType<T>();
+        // FindAnyObjectByType is the non-deprecated replacement in Unity 6
+        // for FindFirstObjectByType (all overloads of the latter are obsolete).
+        T existing = FindAnyObjectByType<T>();
         if (existing != null) return existing;
 
-        GameObject go = new GameObject(goName);
-        T comp = go.AddComponent<T>();
+        var go   = new GameObject(goName);
+        var comp = go.AddComponent<T>();
         Debug.Log($"[GameBootstrap] Created {goName}.");
         return comp;
     }

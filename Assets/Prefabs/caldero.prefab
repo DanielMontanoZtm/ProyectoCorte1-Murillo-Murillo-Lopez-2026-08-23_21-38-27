@@ -166,6 +166,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: caldero
       objectReference: {fileID: 0}
+    - target: {fileID: 919132149155446097, guid: 47292131a82b2744cb532849506aca3d, type: 3}
+      propertyPath: m_TagString
+      value: Cauldron
+      objectReference: {fileID: 0}
     - target: {fileID: 3032555289043904838, guid: 47292131a82b2744cb532849506aca3d, type: 3}
       propertyPath: 'm_Materials.Array.data[0]'
       value: 
@@ -176,10 +180,90 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: -8679921383154817045, guid: 47292131a82b2744cb532849506aca3d, type: 3}
       insertIndex: 5
       addedObject: {fileID: 1313587350123930963}
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 47292131a82b2744cb532849506aca3d, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1798019190095678616}
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 47292131a82b2744cb532849506aca3d, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 4459271627817832271}
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 47292131a82b2744cb532849506aca3d, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 4532084331975976435}
   m_SourcePrefab: {fileID: 100100000, guid: 47292131a82b2744cb532849506aca3d, type: 3}
 --- !u!4 &8266799660101068449 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: 47292131a82b2744cb532849506aca3d, type: 3}
   m_PrefabInstance: {fileID: 8445141008187490634}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &8787159289628507163 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 919132149155446097, guid: 47292131a82b2744cb532849506aca3d, type: 3}
+  m_PrefabInstance: {fileID: 8445141008187490634}
+  m_PrefabAsset: {fileID: 0}
+--- !u!54 &1798019190095678616
+Rigidbody:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8787159289628507163}
+  serializedVersion: 5
+  m_Mass: 1
+  m_LinearDamping: 0
+  m_AngularDamping: 0.05
+  m_CenterOfMass: {x: 0, y: 0, z: 0}
+  m_InertiaTensor: {x: 1, y: 1, z: 1}
+  m_InertiaRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ImplicitCom: 1
+  m_ImplicitTensor: 1
+  m_UseGravity: 0
+  m_IsKinematic: 0
+  m_Interpolate: 0
+  m_Constraints: 124
+  m_CollisionDetection: 0
+--- !u!65 &4459271627817832271
+BoxCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8787159289628507163}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 1
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Size: {x: 1, y: 0.1, z: 1}
+  m_Center: {x: 0, y: 1.67, z: 0}
+--- !u!114 &4532084331975976435
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8787159289628507163}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 165b16be456802142a0011694bc31bff, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CauldronController
+  moveSpeed: 6
+  xRangeLeft: 4
+  xRangeRight: 4
+  accelerationTime: 0.08
+  decelerationTime: 0.12
+  powerUpSpeedMultiplier: 1.8

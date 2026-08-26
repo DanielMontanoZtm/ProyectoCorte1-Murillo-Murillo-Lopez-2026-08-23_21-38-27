@@ -1,16 +1,20 @@
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.InputSystem.EnhancedTouch;
+using Touch      = UnityEngine.InputSystem.EnhancedTouch.Touch;
+using TouchPhase = UnityEngine.InputSystem.TouchPhase;
 
 /// <summary>
 /// Centralises mobile input for the cauldron.
-/// Supports two modes (set via <see cref="InputMode"/>):
+/// Uses the NEW Input System (EnhancedTouch API) — compatible with
+/// activeInputHandler = 1 (Input System only).
 ///
-///   TouchDrag  — swipe left/right anywhere on screen to move the cauldron.
-///   Buttons    — press left/right on-screen buttons (assign via UI buttons
-///                calling SetLeftPressed / SetRightPressed).
+/// Supports two modes:
+///   TouchDrag  — swipe left/right anywhere on screen.
+///   Buttons    — on-screen left/right buttons (call SetLeftPressed /
+///                SetRightPressed from UI Button events).
 ///
-/// HorizontalInput is consumed by CauldronController each FixedUpdate.
-/// A virtual joystick alternative can be layered on top later.
+/// Editor fallback uses Keyboard (new Input System) for ← → arrow keys.
 /// </summary>
 public class MobileInputHandler : MonoBehaviour
 {
@@ -22,9 +26,10 @@ public class MobileInputHandler : MonoBehaviour
     [SerializeField] private InputMode mode = InputMode.TouchDrag;
 
     [Header("Touch drag sensitivity")]
-    [SerializeField] private float dragSensitivity = 0.01f;
+    [Tooltip("Higher = faster cauldron response per pixel of swipe.")]
+    [SerializeField] private float dragSensitivity = 0.012f;
 
-    // ── Exposed value (-1 … 1) ────────────────────────────────────────────────
+    // ── Exposed value (-1 … 1) consumed by CauldronController ────────────────
     public float HorizontalInput { get; private set; }
 
     // ── Internal state ────────────────────────────────────────────────────────
@@ -40,6 +45,16 @@ public class MobileInputHandler : MonoBehaviour
         Instance = this;
     }
 
+    private void OnEnable()
+    {
+        EnhancedTouchSupport.Enable();
+    }
+
+    private void OnDisable()
+    {
+        EnhancedTouchSupport.Disable();
+    }
+
     private void Update()
     {
         HorizontalInput = 0f;
@@ -49,29 +64,35 @@ public class MobileInputHandler : MonoBehaviour
             case InputMode.TouchDrag:
                 HandleTouchDrag();
                 break;
-
             case InputMode.Buttons:
                 HandleButtons();
                 break;
         }
 
-        // Editor / PC fallback
+        // Editor / PC keyboard fallback (new Input System)
 #if UNITY_EDITOR
-        float kb = Input.GetAxis("Horizontal");
-        if (Mathf.Abs(kb) > 0.01f) HorizontalInput = kb;
+        var keyboard = UnityEngine.InputSystem.Keyboard.current;
+        if (keyboard != null)
+        {
+            float kb = 0f;
+            if (keyboard.leftArrowKey.isPressed  || keyboard.aKey.isPressed) kb = -1f;
+            if (keyboard.rightArrowKey.isPressed || keyboard.dKey.isPressed) kb =  1f;
+            if (kb != 0f) HorizontalInput = kb;
+        }
 #endif
     }
 
-    // ── Touch drag ────────────────────────────────────────────────────────────
-
+    // ── Touch drag (EnhancedTouch API) ────────────────────────────────────────
     private void HandleTouchDrag()
     {
-        if (Input.touchCount == 0) return;
+        var activeTouches = Touch.activeTouches;
+        if (activeTouches.Count == 0) return;
 
-        foreach (Touch touch in Input.touches)
+        foreach (var touch in activeTouches)
         {
             // Ignore touches over UI elements
-            if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject(touch.fingerId))
+            if (EventSystem.current != null &&
+                EventSystem.current.IsPointerOverGameObject(touch.touchId))
                 continue;
 
             switch (touch.phase)
@@ -79,44 +100,42 @@ public class MobileInputHandler : MonoBehaviour
                 case TouchPhase.Began:
                     if (_activeTouchId == -1)
                     {
-                        _activeTouchId = touch.fingerId;
-                        _lastTouchX    = touch.position.x;
+                        _activeTouchId = touch.touchId;
+                        _lastTouchX    = touch.screenPosition.x;
                     }
                     break;
 
                 case TouchPhase.Moved:
-                    if (touch.fingerId == _activeTouchId)
+                    if (touch.touchId == _activeTouchId)
                     {
-                        float delta      = touch.position.x - _lastTouchX;
-                        _lastTouchX      = touch.position.x;
-                        HorizontalInput  = Mathf.Clamp(delta * dragSensitivity, -1f, 1f);
+                        float delta     = touch.screenPosition.x - _lastTouchX;
+                        _lastTouchX     = touch.screenPosition.x;
+                        HorizontalInput = Mathf.Clamp(delta * dragSensitivity, -1f, 1f);
                     }
                     break;
 
                 case TouchPhase.Ended:
                 case TouchPhase.Canceled:
-                    if (touch.fingerId == _activeTouchId)
+                    if (touch.touchId == _activeTouchId)
                         _activeTouchId = -1;
                     break;
             }
         }
     }
 
-    // ── Button presses (called by Unity UI Button events) ────────────────────
-
+    // ── Button mode ───────────────────────────────────────────────────────────
     private void HandleButtons()
     {
         if      (_leftPressed  && !_rightPressed) HorizontalInput = -1f;
         else if (_rightPressed && !_leftPressed)  HorizontalInput =  1f;
-        else                                      HorizontalInput =  0f;
     }
 
-    /// <summary>Called by the left on-screen button (PointerDown event).</summary>
+    /// <summary>Called by the left on-screen button (PointerDown / PointerUp).</summary>
     public void SetLeftPressed(bool pressed)  => _leftPressed  = pressed;
 
-    /// <summary>Called by the right on-screen button (PointerDown event).</summary>
+    /// <summary>Called by the right on-screen button (PointerDown / PointerUp).</summary>
     public void SetRightPressed(bool pressed) => _rightPressed = pressed;
 
-    /// <summary>Switch input mode at runtime (e.g. from settings menu).</summary>
+    /// <summary>Switch input mode at runtime.</summary>
     public void SetMode(InputMode newMode) => mode = newMode;
 }

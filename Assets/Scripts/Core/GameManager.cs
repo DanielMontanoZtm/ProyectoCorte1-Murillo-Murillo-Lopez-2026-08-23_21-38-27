@@ -4,24 +4,33 @@ using UnityEngine.Events;
 /// <summary>
 /// Central game state machine. Manages score, lives, time, level progression,
 /// win/lose conditions, and power-up resource. Single instance (singleton).
+///
+/// CAMBIO v2: El power-up se activa de forma INSTANTÁNEA al recoger el objeto
+/// de power-up (FallingObjectType.PowerUp).  Ya no existe un botón de HUD que
+/// lo active; se eliminó TryActivatePowerUp() y se reemplazó por
+/// ActivatePowerUpInstant().  El sistema de "carga" (charge) se conserva
+/// internamente para que el HUD pueda mostrarlo en etapas posteriores, pero
+/// la activación es automática cuando la carga llega al 100%.
 /// </summary>
 public class GameManager : MonoBehaviour
 {
-    // ── Singleton ────────────────────────────────────────────────────────────
+    // ── Singleton ─────────────────────────────────────────────────────────────
     public static GameManager Instance { get; private set; }
 
-    // ── Events ───────────────────────────────────────────────────────────────
-    public UnityEvent<int>   OnScoreChanged      = new UnityEvent<int>();
-    public UnityEvent<int>   OnLivesChanged      = new UnityEvent<int>();
-    public UnityEvent<float> OnTimeChanged        = new UnityEvent<float>();
-    public UnityEvent<float> OnPowerUpChargeChanged = new UnityEvent<float>();
-    public UnityEvent<int>   OnLevelChanged       = new UnityEvent<int>();
-    public UnityEvent        OnGameOver           = new UnityEvent();
-    public UnityEvent        OnGameWin            = new UnityEvent();
-    public UnityEvent        OnGamePaused         = new UnityEvent();
-    public UnityEvent        OnGameResumed        = new UnityEvent();
+    // ── Events ────────────────────────────────────────────────────────────────
+    public UnityEvent<int>   OnScoreChanged         = new();
+    public UnityEvent<int>   OnLivesChanged         = new();
+    public UnityEvent<float> OnTimeChanged          = new();
+    public UnityEvent<float> OnPowerUpChargeChanged = new();
+    public UnityEvent<int>   OnLevelChanged         = new();
+    public UnityEvent        OnGameOver             = new();
+    public UnityEvent        OnGameWin              = new();
+    public UnityEvent        OnGamePaused           = new();
+    public UnityEvent        OnGameResumed          = new();
+    /// <summary>Fired when a power-up becomes active (true) or expires (false).</summary>
+    public UnityEvent<bool>  OnPowerUpStateChanged  = new();
 
-    // ── Serialized config ────────────────────────────────────────────────────
+    // ── Serialized config ─────────────────────────────────────────────────────
     [Header("Lives")]
     [SerializeField] private int startingLives = 3;
 
@@ -29,32 +38,42 @@ public class GameManager : MonoBehaviour
     [SerializeField] private float levelDuration = 60f;
 
     [Header("Power-up")]
-    [SerializeField] private float powerUpChargePerPotion = 0.25f; // 4 potions = full charge
+    [Tooltip("How much charge one PowerUp object adds (0–1).  4 objects = full charge.")]
+    [SerializeField] private float powerUpChargePerPotion = 0.25f;
     [SerializeField] private float powerUpDuration        = 5f;
 
     [Header("Score thresholds to advance level")]
     [SerializeField] private int scoreToLevel2 = 50;
     [SerializeField] private int scoreToLevel3 = 120;
 
-    // ── State ────────────────────────────────────────────────────────────────
+    // ── State ─────────────────────────────────────────────────────────────────
     public enum GameState { Menu, Playing, Paused, GameOver, Win }
 
-    public GameState  CurrentState   { get; private set; } = GameState.Menu;
-    public int        Score          { get; private set; }
-    public int        Lives          { get; private set; }
-    public float      TimeRemaining  { get; private set; }
-    public int        CurrentLevel   { get; private set; } = 1;
-    public float      PowerUpCharge  { get; private set; }   // 0..1
-    public bool       PowerUpActive  { get; private set; }
+    public GameState CurrentState  { get; private set; } = GameState.Menu;
+    public int       Score         { get; private set; }
+    public int       Lives         { get; private set; }
+    public float     TimeRemaining { get; private set; }
+    public int       CurrentLevel  { get; private set; } = 1;
+    /// <summary>Charge level 0–1.  Reaches 1 after <c>powerUpChargePerPotion</c> accumulations.</summary>
+    public float     PowerUpCharge { get; private set; }
+    public bool      PowerUpActive { get; private set; }
 
     private float _powerUpTimer;
 
-    // ── Unity lifecycle ──────────────────────────────────────────────────────
+    // ── Unity lifecycle ───────────────────────────────────────────────────────
     private void Awake()
     {
-        if (Instance != null && Instance != this) { Destroy(gameObject); return; }
+        if (Instance != null && Instance != this)
+        {
+            Destroy(gameObject);
+            return;
+        }
         Instance = this;
+        // DontDestroyOnLoad only makes sense in a real build.
+        // In the editor it causes stale instances between Play sessions.
+#if !UNITY_EDITOR
         DontDestroyOnLoad(gameObject);
+#endif
     }
 
     private void Update()
@@ -80,7 +99,7 @@ public class GameManager : MonoBehaviour
         }
     }
 
-    // ── Public API ───────────────────────────────────────────────────────────
+    // ── Public API ────────────────────────────────────────────────────────────
 
     public void StartGame()
     {
@@ -90,7 +109,8 @@ public class GameManager : MonoBehaviour
         CurrentLevel  = 1;
         PowerUpCharge = 0f;
         PowerUpActive = false;
-        CurrentState  = GameState.Playing;
+
+        CurrentState = GameState.Playing;
 
         OnScoreChanged.Invoke(Score);
         OnLivesChanged.Invoke(Lives);
@@ -108,7 +128,7 @@ public class GameManager : MonoBehaviour
         CheckLevelProgression();
     }
 
-    /// <summary>Called when a negative object reaches the ground.</summary>
+    /// <summary>Called when a negative object reaches the ground (missed).</summary>
     public void LoseLife()
     {
         if (CurrentState != GameState.Playing) return;
@@ -117,38 +137,44 @@ public class GameManager : MonoBehaviour
         if (Lives <= 0) TriggerGameOver();
     }
 
-    /// <summary>Charge power-up meter from catching a power-up potion.</summary>
+    /// <summary>
+    /// Called by FallingObject when a PowerUp type is caught.
+    /// Accumulates charge and activates the power-up INSTANTLY when full.
+    /// No HUD button required.
+    /// </summary>
     public void ChargePowerUp()
     {
         if (CurrentState != GameState.Playing) return;
+
         PowerUpCharge = Mathf.Min(1f, PowerUpCharge + powerUpChargePerPotion);
         OnPowerUpChargeChanged.Invoke(PowerUpCharge);
+
+        // Auto-activate when fully charged
+        if (PowerUpCharge >= 1f)
+            ActivatePowerUpInstant();
     }
 
-    /// <summary>Player taps the HUD power-up button — activates if fully charged.</summary>
-    public bool TryActivatePowerUp()
+    /// <summary>
+    /// Activates the power-up immediately (no button needed).
+    /// Safe to call even if already active — resets the timer.
+    /// </summary>
+    public void ActivatePowerUpInstant()
     {
-        if (CurrentState != GameState.Playing) return false;
-        if (PowerUpActive || PowerUpCharge < 1f) return false;
-
         PowerUpActive = true;
         _powerUpTimer = powerUpDuration;
         PowerUpCharge = 0f;
-        OnPowerUpChargeChanged.Invoke(PowerUpCharge);
-        return true;
-    }
 
-    private void DeactivatePowerUp()
-    {
-        PowerUpActive = false;
-        _powerUpTimer = 0f;
+        OnPowerUpChargeChanged.Invoke(PowerUpCharge);
+        OnPowerUpStateChanged.Invoke(true);
+
+        Debug.Log("[GameManager] Power-up activated instantly!");
     }
 
     public void PauseGame()
     {
         if (CurrentState != GameState.Playing) return;
-        CurrentState      = GameState.Paused;
-        Time.timeScale    = 0f;
+        CurrentState   = GameState.Paused;
+        Time.timeScale = 0f;
         OnGamePaused.Invoke();
     }
 
@@ -160,7 +186,15 @@ public class GameManager : MonoBehaviour
         OnGameResumed.Invoke();
     }
 
-    // ── Internal helpers ─────────────────────────────────────────────────────
+    // ── Internal helpers ──────────────────────────────────────────────────────
+
+    private void DeactivatePowerUp()
+    {
+        PowerUpActive = false;
+        _powerUpTimer = 0f;
+        OnPowerUpStateChanged.Invoke(false);
+        Debug.Log("[GameManager] Power-up expired.");
+    }
 
     private void TriggerGameOver()
     {
@@ -185,7 +219,6 @@ public class GameManager : MonoBehaviour
             CurrentLevel = newLevel;
             OnLevelChanged.Invoke(CurrentLevel);
 
-            // Winning condition: cleared level 3 threshold
             if (CurrentLevel == 3 && Score >= scoreToLevel3 + 50)
                 TriggerWin();
         }
