@@ -1,42 +1,54 @@
 using UnityEngine;
-using UnityEngine.EventSystems;
-using UnityEngine.InputSystem.EnhancedTouch;
-using Touch      = UnityEngine.InputSystem.EnhancedTouch.Touch;
-using TouchPhase = UnityEngine.InputSystem.TouchPhase;
+using UnityEngine.InputSystem;
 
 /// <summary>
-/// Centralises mobile input for the cauldron.
-/// Uses the NEW Input System (EnhancedTouch API) — compatible with
-/// activeInputHandler = 1 (Input System only).
+/// Reads device accelerometer input and exposes a HorizontalInput value (-1 to 1).
 ///
-/// Supports two modes:
-///   TouchDrag  — swipe left/right anywhere on screen.
-///   Buttons    — on-screen left/right buttons (call SetLeftPressed /
-///                SetRightPressed from UI Button events).
+/// CONTROL SCHEME — Accelerometer (tilt):
+///   Tilt phone right → caldero moves right.
+///   Tilt phone left  → caldero moves left.
+///   Hold phone upright (portrait) = neutral position.
 ///
-/// Editor fallback uses Keyboard (new Input System) for ← → arrow keys.
+/// The raw accelerometer X axis is mapped through a dead zone and then
+/// normalized to -1..1 so CauldronController gets clean input.
+///
+/// EDITOR FALLBACK:
+///   ← → arrow keys or A/D work in the editor since the accelerometer
+///   is not available on PC.
+///
+/// CALIBRATION:
+///   neutralX      — raw accelerometer value at rest (usually near 0).
+///                   Tap "Calibrate" button in Inspector at runtime to set it.
+///   tiltRange     — how many units of tilt = full (-1 or 1) input.
+///                   Smaller = more sensitive. Default 0.4 works well.
+///   deadZone      — tilt smaller than this is ignored (prevents drift).
 /// </summary>
 public class MobileInputHandler : MonoBehaviour
 {
     public static MobileInputHandler Instance { get; private set; }
 
-    public enum InputMode { TouchDrag, Buttons }
+    [Header("Accelerometer settings")]
+    [Tooltip("Dead zone — tilts smaller than this are ignored (prevents drift).")]
+    [SerializeField] private float deadZone   = 0.05f;
 
-    [Header("Input mode")]
-    [SerializeField] private InputMode mode = InputMode.TouchDrag;
+    [Tooltip("How much tilt (in g units) maps to full (-1 or 1) input. " +
+             "Lower = more sensitive. Typical range: 0.25 – 0.5.")]
+    [SerializeField] private float tiltRange  = 0.35f;
 
-    [Header("Touch drag sensitivity")]
-    [Tooltip("Higher = faster cauldron response per pixel of swipe.")]
-    [SerializeField] private float dragSensitivity = 0.012f;
+    [Tooltip("Neutral X offset. Tap Calibrate at runtime to set automatically.")]
+    [SerializeField] private float neutralX   = 0f;
 
-    // ── Exposed value (-1 … 1) consumed by CauldronController ────────────────
+    [Header("Smoothing")]
+    [Tooltip("Low-pass filter strength (0 = no smoothing, 1 = no movement). " +
+             "0.1 – 0.2 removes jitter without adding lag.")]
+    [SerializeField] private float smoothing  = 0.15f;
+
+    // ── Exposed value consumed by CauldronController ─────────────────────────
     public float HorizontalInput { get; private set; }
 
-    // ── Internal state ────────────────────────────────────────────────────────
-    private bool  _leftPressed;
-    private bool  _rightPressed;
-    private int   _activeTouchId = -1;
-    private float _lastTouchX;
+    // ── Internal ──────────────────────────────────────────────────────────────
+    private float      _rawInput;
+    private Accelerometer _accel;
 
     // ── Unity lifecycle ───────────────────────────────────────────────────────
     private void Awake()
@@ -47,95 +59,78 @@ public class MobileInputHandler : MonoBehaviour
 
     private void OnEnable()
     {
-        EnhancedTouchSupport.Enable();
+        // Enable the accelerometer sensor through the new Input System
+        _accel = Accelerometer.current;
+        if (_accel != null)
+        {
+            InputSystem.EnableDevice(_accel);
+            Debug.Log("[MobileInputHandler] Accelerometer enabled.");
+        }
+        else
+        {
+            Debug.LogWarning("[MobileInputHandler] No accelerometer found on this device.");
+        }
     }
 
     private void OnDisable()
     {
-        EnhancedTouchSupport.Disable();
+        if (_accel != null)
+            InputSystem.DisableDevice(_accel);
     }
 
     private void Update()
     {
-        HorizontalInput = 0f;
+        float raw = 0f;
 
-        switch (mode)
-        {
-            case InputMode.TouchDrag:
-                HandleTouchDrag();
-                break;
-            case InputMode.Buttons:
-                HandleButtons();
-                break;
-        }
-
-        // Editor / PC keyboard fallback (new Input System)
 #if UNITY_EDITOR
-        var keyboard = UnityEngine.InputSystem.Keyboard.current;
+        // Keyboard fallback in the editor
+        var keyboard = Keyboard.current;
         if (keyboard != null)
         {
-            float kb = 0f;
-            if (keyboard.leftArrowKey.isPressed  || keyboard.aKey.isPressed) kb = -1f;
-            if (keyboard.rightArrowKey.isPressed || keyboard.dKey.isPressed) kb =  1f;
-            if (kb != 0f) HorizontalInput = kb;
+            if (keyboard.leftArrowKey.isPressed  || keyboard.aKey.isPressed) raw = -1f;
+            if (keyboard.rightArrowKey.isPressed || keyboard.dKey.isPressed) raw =  1f;
+        }
+        // Suppress unused-field warnings — these are used in the device build
+        _ = deadZone;
+        _ = tiltRange;
+#else
+        // Real device — read accelerometer
+        if (_accel != null && _accel.enabled)
+        {
+            // acceleration.x:
+            //   Portrait, phone upright → near 0
+            //   Tilt right              → positive
+            //   Tilt left               → negative
+            float tilt = _accel.acceleration.ReadValue().x - neutralX;
+
+            // Apply dead zone
+            if (Mathf.Abs(tilt) < deadZone)
+                tilt = 0f;
+            else
+                tilt -= Mathf.Sign(tilt) * deadZone; // remove dead zone offset
+
+            // Normalize to -1..1 based on tiltRange
+            raw = Mathf.Clamp(tilt / tiltRange, -1f, 1f);
         }
 #endif
+
+        // Low-pass filter to remove jitter
+        _rawInput     = Mathf.Lerp(_rawInput, raw, 1f - smoothing);
+        HorizontalInput = _rawInput;
     }
 
-    // ── Touch drag (EnhancedTouch API) ────────────────────────────────────────
-    private void HandleTouchDrag()
+    // ── Runtime calibration ───────────────────────────────────────────────────
+
+    /// <summary>
+    /// Call this (e.g. from a UI button) while the player holds the phone
+    /// in their natural playing position. Sets the current X reading as neutral.
+    /// </summary>
+    public void Calibrate()
     {
-        var activeTouches = Touch.activeTouches;
-        if (activeTouches.Count == 0) return;
-
-        foreach (var touch in activeTouches)
+        if (_accel != null && _accel.enabled)
         {
-            // Ignore touches over UI elements
-            if (EventSystem.current != null &&
-                EventSystem.current.IsPointerOverGameObject(touch.touchId))
-                continue;
-
-            switch (touch.phase)
-            {
-                case TouchPhase.Began:
-                    if (_activeTouchId == -1)
-                    {
-                        _activeTouchId = touch.touchId;
-                        _lastTouchX    = touch.screenPosition.x;
-                    }
-                    break;
-
-                case TouchPhase.Moved:
-                    if (touch.touchId == _activeTouchId)
-                    {
-                        float delta     = touch.screenPosition.x - _lastTouchX;
-                        _lastTouchX     = touch.screenPosition.x;
-                        HorizontalInput = Mathf.Clamp(delta * dragSensitivity, -1f, 1f);
-                    }
-                    break;
-
-                case TouchPhase.Ended:
-                case TouchPhase.Canceled:
-                    if (touch.touchId == _activeTouchId)
-                        _activeTouchId = -1;
-                    break;
-            }
+            neutralX = _accel.acceleration.ReadValue().x;
+            Debug.Log($"[MobileInputHandler] Calibrated. neutralX = {neutralX:F3}");
         }
     }
-
-    // ── Button mode ───────────────────────────────────────────────────────────
-    private void HandleButtons()
-    {
-        if      (_leftPressed  && !_rightPressed) HorizontalInput = -1f;
-        else if (_rightPressed && !_leftPressed)  HorizontalInput =  1f;
-    }
-
-    /// <summary>Called by the left on-screen button (PointerDown / PointerUp).</summary>
-    public void SetLeftPressed(bool pressed)  => _leftPressed  = pressed;
-
-    /// <summary>Called by the right on-screen button (PointerDown / PointerUp).</summary>
-    public void SetRightPressed(bool pressed) => _rightPressed = pressed;
-
-    /// <summary>Switch input mode at runtime.</summary>
-    public void SetMode(InputMode newMode) => mode = newMode;
 }
