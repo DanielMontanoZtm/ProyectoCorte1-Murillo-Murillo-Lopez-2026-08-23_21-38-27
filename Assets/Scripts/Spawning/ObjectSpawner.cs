@@ -327,7 +327,30 @@ public class ObjectSpawner : MonoBehaviour
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    private void OnLevelChanged(int _) { if (_spawning) StartSpawning(); }
+    private void OnLevelChanged(int _)
+    {
+        if (!_spawning) return;
+
+        // Update speed of ALL currently falling objects to match the new level.
+        // Do NOT recall them — they keep falling, just faster.
+        LevelConfig cfg = LevelManager.Instance?.ActiveConfig;
+        if (cfg == null) return;
+
+        foreach (var fo in _activeObjects)
+        {
+            if (fo == null || !fo.gameObject.activeInHierarchy) continue;
+            float newSpeed = Random.Range(cfg.minFallSpeed, cfg.maxFallSpeed);
+            fo.UpdateSpeed(newSpeed);
+        }
+
+        // Restart only the spawn loop coroutine so it picks up the new
+        // spawnInterval and maxSimultaneous — without touching active objects.
+        StopAllCoroutines();
+        StartCoroutine(SpawnLoop());
+
+        Debug.Log($"[ObjectSpawner] Level changed — updated {_activeObjects.Count} " +
+                  $"active objects to new speed range [{cfg.minFallSpeed},{cfg.maxFallSpeed}]");
+    }
 
     private GameObject GetPrefab(FallingObjectType type) => type switch
     {

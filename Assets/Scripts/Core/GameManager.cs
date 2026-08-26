@@ -38,11 +38,14 @@ public class GameManager : MonoBehaviour
     [SerializeField] private float levelDuration = 60f;
 
     [Header("Power-up")]
-    [Tooltip("How much charge one PowerUp object adds (0–1).  4 objects = full charge.")]
-    [SerializeField] private float powerUpChargePerPotion = 0.25f;
-    [SerializeField] private float powerUpDuration        = 5f;
+    [SerializeField] private float powerUpDuration = 5f;
 
-    [Header("Score thresholds to advance level")]
+    [Header("Score thresholds")]
+    [Tooltip("Score needed to WIN when time runs out. " +
+             "Calculated as ~70% of the theoretical max (~1230 pts) in 60s " +
+             "with current spawn rates and object weights.")]
+    [SerializeField] private int scoreToWin   = 860;
+    // Kept for Inspector compatibility — no longer drive level changes
     [SerializeField] private int scoreToLevel2 = 50;
     [SerializeField] private int scoreToLevel3 = 120;
 
@@ -83,11 +86,18 @@ public class GameManager : MonoBehaviour
         // Countdown timer
         TimeRemaining -= Time.deltaTime;
         OnTimeChanged.Invoke(TimeRemaining);
+        CheckTimedLevelProgression();
 
         if (TimeRemaining <= 0f)
         {
             TimeRemaining = 0f;
-            TriggerGameOver();
+            // Win condition: survived the full time AND reached the score target.
+            // Score target (~860) is ~70% of the theoretical maximum achievable
+            // in 60s given the spawn rates, object weights and power-up bonus.
+            if (Score >= scoreToWin)
+                TriggerWin();
+            else
+                TriggerGameOver();
             return;
         }
 
@@ -123,7 +133,9 @@ public class GameManager : MonoBehaviour
     public void AddScore(int points)
     {
         if (CurrentState != GameState.Playing) return;
-        Score += points;
+        // Double points while power-up is active
+        int finalPoints = PowerUpActive ? points * 2 : points;
+        Score += finalPoints;
         OnScoreChanged.Invoke(Score);
         CheckLevelProgression();
     }
@@ -139,19 +151,12 @@ public class GameManager : MonoBehaviour
 
     /// <summary>
     /// Called by FallingObject when a PowerUp type is caught.
-    /// Accumulates charge and activates the power-up INSTANTLY when full.
-    /// No HUD button required.
+    /// Activates the power-up INSTANTLY — no charge accumulation needed.
     /// </summary>
     public void ChargePowerUp()
     {
         if (CurrentState != GameState.Playing) return;
-
-        PowerUpCharge = Mathf.Min(1f, PowerUpCharge + powerUpChargePerPotion);
-        OnPowerUpChargeChanged.Invoke(PowerUpCharge);
-
-        // Auto-activate when fully charged
-        if (PowerUpCharge >= 1f)
-            ActivatePowerUpInstant();
+        ActivatePowerUpInstant();
     }
 
     /// <summary>
@@ -210,17 +215,25 @@ public class GameManager : MonoBehaviour
 
     private void CheckLevelProgression()
     {
-        int newLevel = CurrentLevel;
-        if      (Score >= scoreToLevel3 && CurrentLevel < 3) newLevel = 3;
-        else if (Score >= scoreToLevel2 && CurrentLevel < 2) newLevel = 2;
+        _ = scoreToLevel2;
+        _ = scoreToLevel3;
+    }
+
+    private void CheckTimedLevelProgression()
+    {
+        // Level 1: full duration
+        // Level 2: last 2/3 of time
+        // Level 3: last 1/3 of time
+        float ratio = TimeRemaining / levelDuration;
+        int newLevel;
+        if      (ratio <= 0.33f) newLevel = 3;
+        else if (ratio <= 0.66f) newLevel = 2;
+        else                     newLevel = 1;
 
         if (newLevel != CurrentLevel)
         {
             CurrentLevel = newLevel;
             OnLevelChanged.Invoke(CurrentLevel);
-
-            if (CurrentLevel == 3 && Score >= scoreToLevel3 + 50)
-                TriggerWin();
         }
     }
 }

@@ -124,6 +124,15 @@ public class FallingObject : MonoBehaviour
         CacheCauldron();
     }
 
+    /// <summary>
+    /// Updates the fall speed of an already-active object (called on level change).
+    /// The object keeps falling — only its speed changes.
+    /// </summary>
+    public void UpdateSpeed(float newSpeed)
+    {
+        FallSpeed = newSpeed;
+    }
+
     public void Catch()
     {
         if (!_alive) return;

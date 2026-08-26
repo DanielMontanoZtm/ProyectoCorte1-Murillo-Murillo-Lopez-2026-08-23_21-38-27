@@ -39,47 +39,47 @@ public class LevelManager : MonoBehaviour
     [Header("Level Configurations")]
     [SerializeField] private LevelConfig level1 = new LevelConfig
     {
-        levelName      = "Nivel 1 – Aprendiz",
-        minFallSpeed   = 2f,
-        maxFallSpeed   = 3.5f,
-        spawnInterval  = 1.8f,
-        potion1Weight  = 50,
-        potion2Weight  = 25,
-        bombWeight     = 20,
-        powerUpWeight  = 5,
-        maxSimultaneous = 3,
-        potion1Points  = 10,
-        potion2Points  = 25
+        levelName       = "Nivel 1 – Aprendiz",
+        minFallSpeed    = 4f,      // was 2 — noticeably faster from the start
+        maxFallSpeed    = 6f,      // was 3.5
+        spawnInterval   = 1.0f,   // was 1.8 — more frequent spawns
+        potion1Weight   = 50,
+        potion2Weight   = 25,
+        bombWeight      = 20,
+        powerUpWeight   = 5,
+        maxSimultaneous = 4,      // was 3
+        potion1Points   = 10,
+        potion2Points   = 25
     };
 
     [SerializeField] private LevelConfig level2 = new LevelConfig
     {
-        levelName      = "Nivel 2 – Hechicero",
-        minFallSpeed   = 3.5f,
-        maxFallSpeed   = 5.5f,
-        spawnInterval  = 1.2f,
-        potion1Weight  = 40,
-        potion2Weight  = 25,
-        bombWeight     = 30,
-        powerUpWeight  = 5,
-        maxSimultaneous = 5,
-        potion1Points  = 10,
-        potion2Points  = 25
+        levelName       = "Nivel 2 – Hechicero",
+        minFallSpeed    = 6f,      // was 3.5
+        maxFallSpeed    = 9f,      // was 5.5
+        spawnInterval   = 0.7f,   // was 1.2
+        potion1Weight   = 40,
+        potion2Weight   = 25,
+        bombWeight      = 30,
+        powerUpWeight   = 5,
+        maxSimultaneous = 6,      // was 5
+        potion1Points   = 10,
+        potion2Points   = 25
     };
 
     [SerializeField] private LevelConfig level3 = new LevelConfig
     {
-        levelName      = "Nivel 3 – Archimago",
-        minFallSpeed   = 5f,
-        maxFallSpeed   = 8f,
-        spawnInterval  = 0.7f,
-        potion1Weight  = 35,
-        potion2Weight  = 20,
-        bombWeight     = 38,
-        powerUpWeight  = 7,
-        maxSimultaneous = 7,
-        potion1Points  = 10,
-        potion2Points  = 25
+        levelName       = "Nivel 3 – Archimago",
+        minFallSpeed    = 9f,      // was 5
+        maxFallSpeed    = 13f,     // was 8
+        spawnInterval   = 0.45f,  // was 0.7
+        potion1Weight   = 35,
+        potion2Weight   = 20,
+        bombWeight      = 38,
+        powerUpWeight   = 7,
+        maxSimultaneous = 8,      // was 7
+        potion1Points   = 10,
+        potion2Points   = 25
     };
 
     public LevelConfig ActiveConfig { get; private set; }

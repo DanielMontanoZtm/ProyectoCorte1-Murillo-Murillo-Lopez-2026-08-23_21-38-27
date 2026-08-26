@@ -33,9 +33,12 @@ public class UIManager : MonoBehaviour
     [SerializeField] private TMP_Text winScoreText;
     [SerializeField] private TMP_Text winMessageText;
 
-    // ── Scene name to reload ──────────────────────────────────────────────────
+    // ── Scene names ───────────────────────────────────────────────────────────
     [Header("Scene management")]
+    [Tooltip("Scene to reload when the player presses Retry.")]
     [SerializeField] private string gameSceneName = "Main";
+    [Tooltip("Scene to load when the player presses Main Menu.")]
+    [SerializeField] private string mainMenuSceneName = "MainMenu";
 
     // ── Unity lifecycle ───────────────────────────────────────────────────────
     private void Awake()
@@ -44,7 +47,19 @@ public class UIManager : MonoBehaviour
         Instance = this;
     }
 
-    private void OnEnable()
+    private void Start()
+    {
+        ShowHUD();
+    }
+
+    private bool _subscribed = false;
+
+    private void Update()
+    {
+        if (!_subscribed) TrySubscribe();
+    }
+
+    private void TrySubscribe()
     {
         var gm = GameManager.Instance;
         if (gm == null) return;
@@ -53,22 +68,19 @@ public class UIManager : MonoBehaviour
         gm.OnGameWin.AddListener(ShowWin);
         gm.OnGamePaused.AddListener(ShowPause);
         gm.OnGameResumed.AddListener(HidePause);
+
+        _subscribed = true;
+        Debug.Log("[UIManager] Subscribed to GameManager events.");
     }
 
-    private void OnDisable()
+    private void OnDestroy()
     {
         var gm = GameManager.Instance;
         if (gm == null) return;
-
         gm.OnGameOver.RemoveListener(ShowGameOver);
         gm.OnGameWin.RemoveListener(ShowWin);
         gm.OnGamePaused.RemoveListener(ShowPause);
         gm.OnGameResumed.RemoveListener(HidePause);
-    }
-
-    private void Start()
-    {
-        ShowMainMenu();
     }
 
     // ── Panel control ─────────────────────────────────────────────────────────
@@ -137,18 +149,18 @@ public class UIManager : MonoBehaviour
         GameManager.Instance?.ResumeGame();
     }
 
-    /// <summary>Retry button on game-over and win screens.</summary>
+    /// <summary>Retry button — reloads the game scene.</summary>
     public void OnRetryButtonPressed()
     {
         Time.timeScale = 1f;
         SceneManager.LoadScene(gameSceneName);
     }
 
-    /// <summary>Main menu button from any end screen.</summary>
+    /// <summary>Main menu button — goes to the menu scene.</summary>
     public void OnMainMenuButtonPressed()
     {
         Time.timeScale = 1f;
-        SceneManager.LoadScene(gameSceneName);
+        SceneManager.LoadScene(mainMenuSceneName);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

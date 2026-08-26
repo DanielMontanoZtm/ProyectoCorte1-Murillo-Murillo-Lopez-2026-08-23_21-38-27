@@ -34,10 +34,10 @@ public class HUDController : MonoBehaviour
     [SerializeField] private Color    urgentTimerColor  = Color.red;
     [SerializeField] private float    urgentThreshold   = 10f;
 
-    // ── Power-up ──────────────────────────────────────────────────────────────
+    // ── Power-up state indicator ──────────────────────────────────────────────
     [Header("Power-up")]
-    [SerializeField] private Image    powerUpChargeBar;   // Filled image
-    [SerializeField] private TMP_Text powerUpLabel;
+    [Tooltip("Text that appears while the power-up effect is active.")]
+    [SerializeField] private GameObject powerUpActiveIndicator;
 
     // ── Level ─────────────────────────────────────────────────────────────────
     [Header("Level")]
@@ -51,7 +51,16 @@ public class HUDController : MonoBehaviour
     [SerializeField] private float     feedbackDuration = 0.8f;
 
     // ── Unity lifecycle ───────────────────────────────────────────────────────
-    private void OnEnable()
+    private bool _subscribed = false;
+
+    private void Update()
+    {
+        // Retry subscription every frame until GameManager exists.
+        // This handles cases where GameManager is created after HUDController.
+        if (!_subscribed) TrySubscribe();
+    }
+
+    private void TrySubscribe()
     {
         var gm = GameManager.Instance;
         if (gm == null) return;
@@ -59,11 +68,16 @@ public class HUDController : MonoBehaviour
         gm.OnScoreChanged.AddListener(UpdateScore);
         gm.OnLivesChanged.AddListener(UpdateLives);
         gm.OnTimeChanged.AddListener(UpdateTimer);
-        gm.OnPowerUpChargeChanged.AddListener(UpdatePowerUpBar);
+        gm.OnPowerUpStateChanged.AddListener(UpdatePowerUpIndicator);
         gm.OnLevelChanged.AddListener(UpdateLevel);
+        gm.OnGameOver.AddListener(OnGameOver);
+        gm.OnGameWin.AddListener(OnGameWin);
+
+        _subscribed = true;
+        Debug.Log("[HUDController] Subscribed to GameManager events.");
     }
 
-    private void OnDisable()
+    private void OnDestroy()
     {
         var gm = GameManager.Instance;
         if (gm == null) return;
@@ -71,9 +85,14 @@ public class HUDController : MonoBehaviour
         gm.OnScoreChanged.RemoveListener(UpdateScore);
         gm.OnLivesChanged.RemoveListener(UpdateLives);
         gm.OnTimeChanged.RemoveListener(UpdateTimer);
-        gm.OnPowerUpChargeChanged.RemoveListener(UpdatePowerUpBar);
+        gm.OnPowerUpStateChanged.RemoveListener(UpdatePowerUpIndicator);
         gm.OnLevelChanged.RemoveListener(UpdateLevel);
+        gm.OnGameOver.RemoveListener(OnGameOver);
+        gm.OnGameWin.RemoveListener(OnGameWin);
     }
+
+    private void OnGameOver() { }   // UIManager handles the panel — no-op here
+    private void OnGameWin()  { }   // UIManager handles the panel — no-op here
 
     // ── Update callbacks ──────────────────────────────────────────────────────
 
@@ -89,8 +108,20 @@ public class HUDController : MonoBehaviour
         {
             if (heartIcons[i] == null) continue;
             bool alive = i < lives;
-            heartIcons[i].sprite = alive ? heartFull : heartEmpty;
-            heartIcons[i].color  = alive ? Color.white : new Color(1, 1, 1, 0.3f);
+
+            if (heartFull != null && heartEmpty != null)
+            {
+                // Use sprites if assigned
+                heartIcons[i].sprite = alive ? heartFull : heartEmpty;
+                heartIcons[i].color  = Color.white;
+            }
+            else
+            {
+                // No sprites — use color only: red = alive, dark grey = lost
+                heartIcons[i].color = alive
+                    ? new Color(0.9f, 0.2f, 0.2f, 1f)     // red
+                    : new Color(0.3f, 0.3f, 0.3f, 0.5f);  // dark grey transparent
+            }
         }
     }
 
@@ -104,13 +135,10 @@ public class HUDController : MonoBehaviour
         timerText.color = seconds <= urgentThreshold ? urgentTimerColor : normalTimerColor;
     }
 
-    private void UpdatePowerUpBar(float charge)
+    private void UpdatePowerUpIndicator(bool isActive)
     {
-        if (powerUpChargeBar != null)
-            powerUpChargeBar.fillAmount = charge;
-
-        if (powerUpLabel != null)
-            powerUpLabel.text = charge >= 1f ? "¡LISTO!" : $"{(int)(charge * 100)}%";
+        if (powerUpActiveIndicator != null)
+            powerUpActiveIndicator.SetActive(isActive);
     }
 
     private void UpdateLevel(int level)
