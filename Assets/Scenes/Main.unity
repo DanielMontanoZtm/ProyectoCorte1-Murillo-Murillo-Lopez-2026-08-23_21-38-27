@@ -243,14 +243,16 @@ MonoBehaviour:
   potion2Prefab: {fileID: 8382263005396156324, guid: 68495c45320205840b93242637a3506b, type: 3}
   bombPrefab: {fileID: 479292799145644850, guid: b61a2b955d0ef8d4f8f417128e6f5efe, type: 3}
   powerUpPrefab: {fileID: 9127406736204274777, guid: 1226927786d41ca4eb2058f18d41d85a, type: 3}
-  spawnY: 10
-  spawnXMin: -3.8
-  spawnXMax: 3.8
-  spawnZ: 0
+  spawnHeightAboveCauldron: 25
+  spawnRangeLeft: 4
+  spawnRangeRight: 4
+  spawnZ: -9.24
+  autoReadCauldronTransform: 1
   poolSizePotion1: 8
   poolSizePotion2: 8
   poolSizeBomb: 6
   poolSizePowerUp: 4
+  uniformObjectScale: 0.3
   maxConsecutiveBombs: 2
   maxTurnsBetweenPowerUps: 12
   minXGap: 1.2
@@ -831,12 +833,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CameraController
   playFieldHalfWidth: 3.8
-  playFieldBottom: -1.5
-  playFieldTop: 10
   horizontalMarginUnits: 0.5
-  cameraZ: -12
-  cameraVertTilt: 8
-  skyColor: {r: 0.06, g: 0.04, b: 0.12, a: 1}
+  minFOV: 30
+  maxFOV: 120
 --- !u!1001 &7117390443260463655
 PrefabInstance:
   m_ObjectHideFlags: 0
